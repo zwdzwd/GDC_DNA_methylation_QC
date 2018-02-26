@@ -61,7 +61,7 @@ awk '$4==0{print $2,$3-1,$3+49,$1,$3+49,"+"}$4==16{print $2,$3-1,$3+49,$1,$3,"-"
 # next base
 awk '$4==16{print $2,$3-2,$3-1,"-",$1}$4==0{print $2,$3+49,$3+50,"+",$1}' map.hg19.tsv | sortbed | wzseqtk getfasta -f ~/references/hg19/hg19.fa -i - | awk -f wanding.awk -e '{if($4=="-") $6=dnarev($6); print $0}' >map.hg19.extbase.bed
 
-**** hg19 with contig
+**** hg19 with decoy contig
 
 cd ~/projects/laird-secondary/2016_05_13_hm450_annotation
 ~/tools/biscuit/development/biscuit/biscuit align ~/references/hg19/biscuit/hg19.fa -t 10 typeII.fastq >withcontig_typeII.hg19.sam
@@ -85,7 +85,7 @@ awk '$4==0{print $2,$3-1,$3+49,$1,$3+49,"+"}$4==16{print $2,$3-1,$3+49,$1,$3,"-"
 # next base
 awk '$4==16{print $2,$3-2,$3-1,"-",$1}$4==0{print $2,$3+49,$3+50,"+",$1}' map.hg38.tsv | sortbed | wzseqtk getfasta -f ~/references/hg38/hg38.fa -i - | awk -f wanding.awk -e '{if($4=="-") $6=dnarev($6); print $0}' >map.hg38.extbase.bed
 
-**** hg38 with contig
+**** hg38 with decoy contig
 
 cd ~/projects/laird-secondary/2016_05_13_hm450_annotation
 ~/tools/biscuit/development/biscuit/biscuit align ~/references/hg38/biscuit/hg38.fa -t 10 typeII.fastq >withcontig_typeII.hg38.sam
@@ -228,7 +228,6 @@ lc hg38_typeII.nextbase_masked.probes.txt
 
 *** hg38 all subpopulations
 
-#+BEGIN_SRC R
 cd /secondary/projects/laird/projects/2016_05_13_hm450_annotation
 bedtools intersect -a map.hg38.withtarget.bed -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/GRCh38/commonmut.all.bed -wo -sorted | awk -f wanding.awk -e '{if($5>$8&&$5<=$9) d=0; else d=min(abs($5-$9),abs($5-$8-1)); print $0,d}' >map.hg38.withtarget.commonsnp.bed
 
@@ -237,7 +236,6 @@ sortbed typeI.nextbase.bed | awk '$1!="*"' | bedtools intersect -a - -b ~/projec
 sortbed typeII.nextbase.bed | awk '$1!="*"' | bedtools intersect -a - -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/GRCh38/commonsnp.all.bed -sorted -wo | awk -f wanding.awk -e '{print $1,$2,$3,$8,$3,"*",joinr(9,NF),"-1"}' >typeII.nextbase.commonsnp.bed
 
 cat typeII.nextbase.commonsnp.bed map.hg38.withtarget.commonsnp.bed | sortbed > map.hg38.withtarget.commonsnp.merge.bed
-#+END_SRC
 
 ** RMSK
 
@@ -736,9 +734,8 @@ GR2bed(typeII.nextbase, '/secondary/projects/laird/projects/2016_05_13_hm450_ann
 
 *** compare hg38 and hg19
 **** mapping
-#+BEGIN_SRC R
 
-#+END_SRC
+#+BEGIN_SRC R
 hg38Map <- hg38Map[rownames(hg19Map),]
 
 ## type II after converting G to A
@@ -811,17 +808,18 @@ wzmanip compare -t1 /secondary/projects/laird/projects/2016_05_13_hm450_annotati
 # 2not1: 742
 
 wzmanip compare -t1 hg19_typeII.nextbase_masked.probes.txt -c1 1 -t2 hg38_typeII.nextbase_masked.probes.txt -c2 1
-12: 6059
-1not2: 427
-2not1: 1142
+# 12: 6059
+# 1not2: 427
+# 2not1: 1142
 
+#+BEGIN_SRC R
 sum(hm450.manifest.hg38$MASK.extBase | hm450.manifest$MASK.extBase)
-## 105
-
+# 105
 hm450.manifest <- readRDS('/secondary/projects/laird/projects/2016_05_13_InfiniumAnnotation/20180104/hm450/hm450.hg19.manifest.rds')
 a <- a[names(hm450.manifest)]
 summarizeMASKs2(hm450.manifest)
 summarizeMASKs(a)
+#+END_SRC
 
 *** gather maskings
 **** hg38
