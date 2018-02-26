@@ -1,0 +1,887 @@
+* Prepare
+
+#+BEGIN_SRC R
+suppressPackageStartupMessages(library(GenomicRanges))
+suppressPackageStartupMessages(library(Biostrings))
+suppressPackageStartupMessages(library(Rsamtools))
+suppressPackageStartupMessages(library(stringr))
+#suppressPackageStartupMessages(library(VennDiagram))
+#suppressPackageStartupMessages(library(gplots))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(tidyr))
+source('~/wzlib/Rutils/wzseq.R')
+#+END_SRC
+
+* HM450
+** Load manifest
+
+#+BEGIN_SRC R
+setwd('/secondary/projects/laird/projects/2016_05_13_hm450_annotation')
+manifest <- read.csv('hm450.official.manifest/GPL13534_HumanMethylation450_15017482_v.1.1.csv',header=T,stringsAsFactors=F,row.names=1)
+ct <- which(rownames(manifest) == '[Controls]')
+manifest.ordering <- manifest[1:(ct-1),]
+manifest.ordering.cg <- manifest.ordering[grep('^cg', manifest.ordering$Name),]
+manifest.ordering.ch <- manifest.ordering[grep('^ch', manifest.ordering$Name),]
+manifest.ordering.rs <- manifest.ordering[grep('^rs', manifest.ordering$Name),]
+hm450.manifest.original <- manifest.ordering
+
+## load auxiliary functions: make.gr, gr2seqs
+source('~/wzprojects/2017_03_13_QC_build_manifest_Infinium_utils.R')
+
+#+END_SRC
+
+** mapping
+
+*** create fastq
+
+cd ~/projects/laird-secondary/2016_05_13_hm450_annotation
+gsed "s/,/\t/g" hm450.official.manifest/GPL13534_HumanMethylation450_15017482_v.1.1.csv | gsed "s/\"//g" | awk -f wanding.awk -e '$7=="II"{print "@"$1; print gensub(/R/,"A","g",$4); print "+"; print repeats("#",length($4));}' >typeII.fastq
+
+gsed "s/,/\t/g" hm450.official.manifest/GPL13534_HumanMethylation450_15017482_v.1.1.csv | gsed "s/\"//g" | awk -f wanding.awk -e '$7=="I"{print "@"$1"_A"; print $4; print "+"; print repeats("#",length($4));print "@"$1"_B"; print $6; print "+"; print repeats("#",length($6));}' >typeI.fastq
+
+*** mapping
+**** hg19
+
+cd ~/projects/laird-secondary/2016_05_13_hm450_annotation
+~/tools/biscuit/development/biscuit/bin/biscuit align ~/references/hg19_noContig/biscuit/hg19_noContig.fa -t 10 typeII.fastq >typeII.hg19.sam
+~/tools/biscuit/development/biscuit/bin/biscuit align ~/references/hg19_noContig/biscuit/hg19_noContig.fa -t 10 typeI.fastq >typeI.hg19.sam
+
+awk '(!/^@/ && $2<100){match($1,/(.*)_([AB])/,a); print a[1],a[2],$3,$4,$2,$5,$6}' typeI.hg19.sam | sort -k1,1 -k2,2 | awk 'BEGIN{p="";q="";}{if(p!=$1&&p) {print q; q="";} if(q) q=q"\t"; q=q""$0;p=$1;}END{print q}' | cut -f1,3-7,10-14 >map.hg19.tsv
+awk '(!/^@/ && $2<100){print $1,$3,$4,$2,$5,$6,".","NA","NA","NA","."}' typeII.hg19.sam >>map.hg19.tsv
+
+cut -f4 map.hg19.tsv | sort | uniq ## only 0 and 16
+
+awk '{print $2,$3,$3+50,$1}' map.hg19.tsv | sortbed | wzseqtk getfasta -f ~/references/hg19/hg19.fa -i - -o hg19.probeSeq.tsv
+
+# probe with target
+# not "target", just "end"s of the probe in the natural direction
+awk '$4==0{print $2,$3-1,$3+49,$1,$3+49,"+"}$4==16{print $2,$3-1,$3+49,$1,$3,"-"}' map.hg19.tsv | sortbed >map.hg19.withtarget.bed
+
+# next base
+awk '$4==16{print $2,$3-2,$3-1,"-",$1}$4==0{print $2,$3+49,$3+50,"+",$1}' map.hg19.tsv | sortbed | wzseqtk getfasta -f ~/references/hg19/hg19.fa -i - | awk -f wanding.awk -e '{if($4=="-") $6=dnarev($6); print $0}' >map.hg19.extbase.bed
+
+**** hg19 with contig
+
+cd ~/projects/laird-secondary/2016_05_13_hm450_annotation
+~/tools/biscuit/development/biscuit/biscuit align ~/references/hg19/biscuit/hg19.fa -t 10 typeII.fastq >withcontig_typeII.hg19.sam
+~/tools/biscuit/development/biscuit/biscuit align ~/references/hg19/biscuit/hg19.fa -t 10 typeI.fastq >withcontig_typeI.hg19.sam
+
+**** hg38
+
+cd ~/projects/laird-secondary/2016_05_13_hm450_annotation
+~/tools/biscuit/development/biscuit/bin/biscuit align ~/references/hg38_noContig/biscuit/hg38_noContig.fa -t 10 typeII.fastq >typeII.hg38.sam
+~/tools/biscuit/development/biscuit/bin/biscuit align ~/references/hg38_noContig/biscuit/hg38_noContig.fa -t 10 typeI.fastq >typeI.hg38.sam
+
+awk '(!/^@/ && $2<100){match($1,/(.*)_([AB])/,a); print a[1],a[2],$3,$4,$2,$5,$6}' typeI.hg38.sam | sort -k1,1 -k2,2 | awk 'BEGIN{p="";q="";}{if(p!=$1&&p) {print q; q="";} if(q) q=q"\t"; q=q""$0;p=$1;}END{print q}' | cut -f1,3-7,10-14 >map.hg38.tsv
+awk '(!/^@/ && $2<100){print $1,$3,$4,$2,$5,$6,".","NA","NA","NA","."}' typeII.hg38.sam >>map.hg38.tsv
+
+awk '$2!="*"{print $2,$3,$3+50,$1}' map.hg38.tsv | sortbed | wzseqtk getfasta -f ~/references/hg38/hg38.fa -i - -o hg38.probeSeq.tsv
+
+# probe with target
+# not "target", just "end"s of the probe in the natural direction
+awk '$4==0{print $2,$3-1,$3+49,$1,$3+49,"+"}$4==16{print $2,$3-1,$3+49,$1,$3,"-"}' map.hg38.tsv | sortbed >map.hg38.withtarget.bed
+
+# next base
+awk '$4==16{print $2,$3-2,$3-1,"-",$1}$4==0{print $2,$3+49,$3+50,"+",$1}' map.hg38.tsv | sortbed | wzseqtk getfasta -f ~/references/hg38/hg38.fa -i - | awk -f wanding.awk -e '{if($4=="-") $6=dnarev($6); print $0}' >map.hg38.extbase.bed
+
+**** hg38 with contig
+
+cd ~/projects/laird-secondary/2016_05_13_hm450_annotation
+~/tools/biscuit/development/biscuit/biscuit align ~/references/hg38/biscuit/hg38.fa -t 10 typeII.fastq >withcontig_typeII.hg38.sam
+~/tools/biscuit/development/biscuit/biscuit align ~/references/hg38/biscuit/hg38.fa -t 10 typeI.fastq >withcontig_typeI.hg38.sam
+
+**** mm10
+
+cd ~/projects/laird-secondary/2016_05_13_hm450_annotation
+~/tools/biscuit/development/biscuit/bin/biscuit align ~/references/mm10_noContig/biscuit/mm10_noContig.fa -t 10 typeII.fastq >typeII.mm10.sam
+~/tools/biscuit/development/biscuit/bin/biscuit align ~/references/mm10_noContig/biscuit/mm10_noContig.fa -t 10 typeI.fastq >typeI.mm10.sam
+
+awk '(!/^@/ && $2<100){match($1,/(.*)_([AB])/,a); print a[1],a[2],$3,$4,$2,$5,$6}' typeI.mm10.sam | sort -k1,1 -k2,2 | awk 'BEGIN{p="";q="";}{if(p!=$1&&p) {print q; q="";} if(q) q=q"\t"; q=q""$0;p=$1;}END{print q}' | cut -f1,3-7,10-14 | awk 'BEGIN{print "probe\tchrmA\tbegA\tflagA\tmapQ.A\tcigarA\tchrmB\tbegB\tflagB\tmapQ.B\tcigarB";}1' >map.mm10.tsv
+awk '(!/^@/ && $2<100){print $1,$3,$4,$2,$5,$6,".","NA","NA","NA","."}' typeII.mm10.sam >>map.mm10.tsv
+
+# upload zwd
+scp /secondary/projects/laird/projects/2016_05_13_hm450_annotation/map.mm10.tsv zwd:~/public_html/InfiniumAnnotation/20160711/hm450/hm450.map.mm10.tsv
+
+** copy number analysis
+*** get natural sequence, replacing R in type-II reads to A, no change to sequence of type-I
+
+gsed "s/,/\t/g" GPL13534_HumanMethylation450_15017482_v.1.1.csv | gsed "s/\"//g" | awk -f wanding.awk -e '$7=="II"{print $1"\t"gensub(/R/,"A","g",$4);}' > /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19.probeSeq.natural.tsv
+gsed "s/,/\t/g" GPL13534_HumanMethylation450_15017482_v.1.1.csv | gsed "s/\"//g" | awk -f wanding.awk -e '$7=="I"{print $1"\t"$4}' >>/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19.probeSeq.natural.tsv
+
+python ~/wzprojects/2016_05_16_Infinium_copynumber.py buildlib /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19.probeSeq.natural.tsv /secondary/projects/laird/projects/2016_05_13_hm450_annotation/end3lib
+
+*** hg19
+
+cd /secondary/projects/laird/projects/2016_05_13_hm450_annotation/
+mkdir tally_hg19
+mkdir pbs_hg19
+
+for i in {15..50}; do pbsgen one -ppn 1 -memG 20 -hour 24 "python ~/wzprojects/2016_05_16_Infinium_copynumber.py tally /secondary/projects/laird/projects/2016_05_13_hm450_annotation/end3lib /primary/vari/genomicdata/genomes/hg19_noContig/hg19_noContig.fa ${i} /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally_hg19" -dest pbs_hg19/tally_${i}.pbs -submit; done
+
+python ~/wzprojects/2016_05_16_Infinium_copynumber.py format /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally_hg19 >~/projects/laird-secondary/2016_05_13_hm450_annotation/tally.copynumber_hg19.tsv
+
+awk 'NR==1{for(i=1;i<=NF;++i){if($i==25)a=i;if($i==30)b=i;if($i==35)c=i;if($i==40)d=i;}}NR>=1{print $1,$a,$b,$c,$d}' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally.copynumber_hg19.tsv | awk 'NR>1&&$2>1{print $1}' | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy25_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy25_mask_probes.txt
+# 59706
+
+awk 'NR==1{for(i=1;i<=NF;++i){if($i==25)a=i;if($i==30)b=i;if($i==35)c=i;if($i==40)d=i;}}NR>=1{print $1,$a,$b,$c,$d}' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally.copynumber_hg19.tsv | awk 'NR>1&&$3>1{print $1}' | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy30_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy30_mask_probes.txt
+# 16546
+
+awk 'NR==1{for(i=1;i<=NF;++i){if($i==25)a=i;if($i==30)b=i;if($i==35)c=i;if($i==40)d=i;}}NR>=1{print $1,$a,$b,$c,$d}' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally.copynumber_hg19.tsv | awk 'NR>1&&$4>1{print $1}' | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy35_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy35_mask_probes.txt
+# 9498
+
+awk 'NR==1{for(i=1;i<=NF;++i){if($i==25)a=i;if($i==30)b=i;if($i==35)c=i;if($i==40)d=i;}}NR>=1{print $1,$a,$b,$c,$d}' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally.copynumber_hg19.tsv | awk 'NR>1&&$5>1{print $1}' | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy40_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy40_mask_probes.txt
+# 5343
+
+*** hg38
+
+cd /secondary/projects/laird/projects/2016_05_13_hm450_annotation/
+mkdir tally
+mkdir pbs
+
+for i in {15..50}; do pbsgen one -ppn 1 -memG 20 -hour 24 "python ~/wzprojects/2016_05_16_Infinium_copynumber.py tally /secondary/projects/laird/projects/2016_05_13_hm450_annotation/end3lib /primary/vari/genomicdata/genomes/hg38_noContig/hg38_noContig.fa ${i} /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally/" -dest pbs/tally_${i}.pbs -submit; done
+
+python ~/wzprojects/2016_05_16_Infinium_copynumber.py format /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally >~/projects/laird-secondary/2016_05_13_hm450_annotation/tally.copynumber.tsv
+
+awk 'NR==1{for(i=1;i<=NF;++i){if($i==25)a=i;if($i==30)b=i;if($i==35)c=i;if($i==40)d=i;}}NR>=1{print $1,$a,$b,$c,$d}' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally.copynumber.tsv | awk 'NR>1&&$2>1{print $1}' | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy25_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy25_mask_probes.txt
+# 60654
+
+awk 'NR==1{for(i=1;i<=NF;++i){if($i==25)a=i;if($i==30)b=i;if($i==35)c=i;if($i==40)d=i;}}NR>=1{print $1,$a,$b,$c,$d}' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally.copynumber.tsv | awk 'NR>1&&$3>1{print $1}' | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy30_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy30_mask_probes.txt
+# 17568
+
+awk 'NR==1{for(i=1;i<=NF;++i){if($i==25)a=i;if($i==30)b=i;if($i==35)c=i;if($i==40)d=i;}}NR>=1{print $1,$a,$b,$c,$d}' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally.copynumber.tsv | awk 'NR>1&&$4>1{print $1}' | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy35_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy35_mask_probes.txt
+# 10545
+
+awk 'NR==1{for(i=1;i<=NF;++i){if($i==25)a=i;if($i==30)b=i;if($i==35)c=i;if($i==40)d=i;}}NR>=1{print $1,$a,$b,$c,$d}' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally.copynumber.tsv | awk 'NR>1&&$5>1{print $1}' | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy40_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy40_mask_probes.txt
+# 6419
+
+*** mm10
+
+cd /secondary/projects/laird/projects/2016_05_13_hm450_annotation/
+mkdir tally_mouse
+mkdir pbs_mouse
+
+for i in {15..50}; do pbsgen one -ppn 1 -memG 20 -hour 24 "python ~/wzprojects/2016_05_16_Infinium_copynumber.py tally /secondary/projects/laird/projects/2016_05_13_hm450_annotation/end3lib /primary/vari/genomicdata/genomes/mm10_noContig/mm10_noContig.fa ${i} /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally_mouse/" -dest pbs_mouse/tally_${i}.pbs -submit; done
+
+python ~/wzprojects/2016_05_16_Infinium_copynumber.py format /secondary/projects/laird/projects/2016_05_13_hm450_annotation/tally >~/projects/laird-secondary/2016_05_13_hm450_annotation/tally.copynumber.mm10.tsv
+
+** SNP
+*** hg19 
+**** distance to SNPs
+cd /secondary/projects/laird/projects/2016_05_13_hm450_annotation
+bedtools intersect -a map.hg19.withtarget.bed -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/b135/b135_GMAF1p_hg19.bed -wo -sorted | awk -f wanding.awk -e '{if($5>$8&&$5<=$9) d=0; else d=min(abs($5-$9),abs($5-$8-1)); print joinr(1,12),d}' >map.hg19.withtarget.commonsnp_global.bed
+
+awk '$13>=0.01&&$14<=5&&!($4~/rs/)' map.hg19.withtarget.commonsnp_global.bed | cut -f4 | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_snp_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_snp_mask_probes.txt
+# 14341
+
+**** SNPs right on extension base
+***** Type-I
+sortbed hg19_typeI.nextbase.bed | awk '$1!="*"' | bedtools intersect -a - -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/b135/b135_GMAF1p_hg19.bed -sorted -wo | cut -f 1-17 | awk -f wanding.awk -e 'BEGIN{color["A"]="Red"; color["T"]="Red"; color["G"]="Grn"; color["C"]="Grn";}{t=$14; if($7=="up" && $14=="G") t="A"; if($7=="down" && $14=="C") t="T"; if (!(t in color)) t="Unknown"; else c=color[t]; if ($7=="down" && t!="Unknown") t=dnarev(t); print joinr(1,15),t,c;}' >hg19_typeI.nextbase.commonsnp_global.bed
+
+# channel switching probe list
+awk '$6!=$17' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_typeI.nextbase.commonsnp_global.bed | cut -f8 | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_typeI.channelswitching.probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_typeI.channelswitching.probes.txt
+# 305
+
+***** Type-II
+# MAF>=0.01
+sortbed hg19_typeII.nextbase.bed | awk '$1!="*"' | bedtools intersect -a - -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/b135/b135_GMAF1p_hg19.bed -sorted -wo | awk -f wanding.awk -e '{print joinr(1,14),joinr(9,NF),"-1"}' >hg19_typeII.nextbase.commonsnp_global.bed
+
+cut -f8 hg19_typeII.nextbase.commonsnp_global.bed | grep -v rs | sort | uniq >hg19_typeII.nextbase_masked.probes.txt
+lc hg19_typeII.nextbase_masked.probes.txt
+# 6446
+
+*** hg38
+**** distance to SNPs
+cd /secondary/projects/laird/projects/2016_05_13_hm450_annotation
+bedtools intersect -a map.hg38.withtarget.bed -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/GRCh38/commonmut.all.bed -wo -sorted | awk -f wanding.awk -e '{if($5>$8&&$5<=$9) d=0; else d=min(abs($5-$9),abs($5-$8-1)); print joinr(1,12),$15,d}' >map.hg38.withtarget.commonsnp_global.bed
+
+awk '$13>=0.01&&$14<=5&&!($4~/rs/)' map.hg38.withtarget.commonsnp_global.bed | cut -f4 | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_snp_mask_probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_snp_mask_probes.txt
+# 17212
+
+**** SNPs right on extension base
+***** Type-I
+sortbed typeI.nextbase.bed | awk '$1!="*"' | bedtools intersect -a - -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/GRCh38/commonsnp.all.bed -sorted -wo | cut -f 1-17 | awk -f wanding.awk -e 'BEGIN{color["A"]="Red"; color["T"]="Red"; color["G"]="Grn"; color["C"]="Grn";}{t=$14; if($7=="up" && $14=="G") t="A"; if($7=="down" && $14=="C") t="T"; if (!(t in color)) t="Unknown"; else c=color[t]; if ($7=="down" && t!="Unknown") t=dnarev(t); print joinr(1,15),t,c;}' >hg38_typeI.nextbase.commonsnp_global.bed
+
+# channel switching probe list
+awk '$6!=$17' /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_typeI.nextbase.commonsnp_global.bed | cut -f8 | sort | uniq >/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_typeI.channelswitching.probes.txt
+lc /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_typeI.channelswitching.probes.txt
+# 1030
+
+***** Type-II
+# MAF>=0.01
+sortbed typeII.nextbase.bed | awk '$1!="*"' | bedtools intersect -a - -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/GRCh38/commonsnp.all.bed -sorted -wo | awk -f wanding.awk -e '$17>=0.01{print joinr(1,14),$17,"1\t-1"}' >hg38_typeII.nextbase.commonsnp_global.bed
+
+cut -f8 hg38_typeII.nextbase.commonsnp_global.bed | grep -v rs | sort | uniq >hg38_typeII.nextbase_masked.probes.txt
+lc hg38_typeII.nextbase_masked.probes.txt
+# 7161
+
+*** hg38 all subpopulations
+
+#+BEGIN_SRC R
+cd /secondary/projects/laird/projects/2016_05_13_hm450_annotation
+bedtools intersect -a map.hg38.withtarget.bed -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/GRCh38/commonmut.all.bed -wo -sorted | awk -f wanding.awk -e '{if($5>$8&&$5<=$9) d=0; else d=min(abs($5-$9),abs($5-$8-1)); print $0,d}' >map.hg38.withtarget.commonsnp.bed
+
+sortbed typeI.nextbase.bed | awk '$1!="*"' | bedtools intersect -a - -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/GRCh38/commonsnp.all.bed -sorted -wo | cut -f 1-17 | awk -f wanding.awk -e 'BEGIN{color["A"]="Red"; color["T"]="Red"; color["G"]="Grn"; color["C"]="Grn";}{t=$14; if($7=="up" && $14=="G") t="A"; if($7=="down" && $14=="C") t="T"; if (!(t in color)) t="Unknown"; else c=color[t]; if ($7=="down" && t!="Unknown") t=dnarev(t); print $0,t,c;}' >typeI.nextbase.commonsnp.bed
+
+sortbed typeII.nextbase.bed | awk '$1!="*"' | bedtools intersect -a - -b ~/projects/shen-secondary/2016_05_27_dbSNP_1KG/GRCh38/commonsnp.all.bed -sorted -wo | awk -f wanding.awk -e '{print $1,$2,$3,$8,$3,"*",joinr(9,NF),"-1"}' >typeII.nextbase.commonsnp.bed
+
+cat typeII.nextbase.commonsnp.bed map.hg38.withtarget.commonsnp.bed | sortbed > map.hg38.withtarget.commonsnp.merge.bed
+#+END_SRC
+
+** RMSK
+
+*** hg38
+
+# overlap with repeat (rmsk.txt.bed is put to /primary/vari/genomicdata/genomes/hg38/rmsk.txt.bed)
+sortbed probeEnd15.bed | awk '$1!="*"' | bedtools intersect -a /primary/vari/genomicdata/genomes/hg38/rmsk.txt.bed -b - -sorted -wo > probeEnd15.rmsk.bed
+
+sortbed probeEnd40.bed | awk '$1!="*"' | bedtools intersect -a /primary/vari/genomicdata/genomes/hg38/rmsk.txt.bed -b - -sorted -wo > probeEnd40.rmsk.bed
+
+** build GenomicRanges
+*** hg19
+
+#+BEGIN_SRC R
+
+## read tables
+################
+## sourceseq is consistent with the probe sequence in term of direction. 
+hg19Map <- read.table("/secondary/projects/laird/projects/2016_05_13_hm450_annotation/map.hg19.tsv", col.names=c('probeID','chrmA','begA','flag.A','mapQ.A','cigarA','chrmB','begB','flag.B','mapQ.B','cigarB'), stringsAsFactors=FALSE, sep='\t', row.names = 'probeID')
+dim(hg19Map)
+# [1] 485577     10
+
+hg19Seq <- read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19.probeSeq.tsv', col.names=c('chrm','beg','end','probeID','seq'), stringsAsFactors=FALSE, sep='\t', row.names='probeID')
+dim(hg19Seq)
+# [1] 485577     4
+
+## CpG probes
+#################
+## I make sourceseq consistent with the probe sequence in term of direction. 
+gr.cpg <- make.gr(manifest.ordering.cg, 1, 'cg')
+gr.cpg <- gr2seqs(gr.cpg, faf, hg19Map, hg19Seq)
+
+## CpH probes
+##################
+gr.ch <- make.gr(manifest.ordering.ch, 0, 'ch')
+gr.ch <- gr2seqs(gr.ch, faf, hg19Map, hg19Seq)
+
+## update SNP location and names
+###################################
+## library(SNPlocs.Hsapiens.dbSNP.20120608)
+## snps <- SNPlocs.Hsapiens.dbSNP.20120608
+## library(SNPlocs.Hsapiens.dbSNP.20110815)
+suppressPackageStartupMessages(library(SNPlocs.Hsapiens.dbSNP144.GRCh37))
+snps <- SNPlocs.Hsapiens.dbSNP144.GRCh37
+rsnames <- rownames(manifest.ordering.rs)
+names(rsnames) <- rsnames
+## replace rs13369115 by rs10155413
+rsnames[rsnames == 'rs13369115'] <- 'rs10155413'
+snplocs <- snpsById(snps, rsnames, ifnotfound='warning')
+
+## Create GRanges for SNPs and fix probe locations.
+gr.snp <- make.gr(manifest.ordering.rs, 0, 'rs', 
+  .seqnames=paste0('chr',as.character(seqnames(snplocs))),
+  .iranges=ranges(snplocs))
+names(gr.snp) <- names(rsnames)
+gr.snp <- gr2seqs(gr.snp, faf, hg19Map, hg19Seq)
+
+## Merge data
+################
+hm450.manifest <- c(gr.cpg,gr.ch,gr.snp)
+hm450.manifest <- sortSeqlevels(hm450.manifest)
+hm450.manifest$designType <- as.factor(hm450.manifest$designType)
+hm450.manifest$orientation <- as.factor(hm450.manifest$orientation)
+hm450.manifest <- sort(hm450.manifest)
+
+## Reset coordinate of GR using mapped coordinates
+#####################################################
+## masking based on hg19 mapping
+##--------------------------------
+mcols(hm450.manifest) <- cbind(mcols(hm450.manifest), hg19Map[names(hm450.manifest),])
+seqlevels(hm450.manifest) <- c(seqlevels(hm450.manifest),'chrM')
+posMatch <- rep(NA, length(hm450.manifest))
+
+xIdown <- which(hm450.manifest$designType=='I' & hm450.manifest$orientation=='down')
+posMatch[xIdown] <- start(ranges(hm450.manifest[xIdown]))==hm450.manifest[xIdown]$begA
+toCorr <- xIdown[!posMatch[xIdown]]
+length(toCorr)
+## [1] 1
+## hm450.manifest[toCorr]
+seqnames(hm450.manifest[toCorr]) <- factor(hm450.manifest$chrmA[toCorr], levels=seqlevels(hm450.manifest))
+ranges(hm450.manifest[toCorr]) <- IRanges(
+  start = hm450.manifest$begA[toCorr], 
+  end = hm450.manifest$begA[toCorr] + width(hm450.manifest[toCorr]) - 1)
+
+xIIdown <- which(hm450.manifest$designType=='II' & hm450.manifest$orientation=='down')
+posMatch[xIIdown] <- start(ranges(hm450.manifest[xIIdown]))==hm450.manifest[xIIdown]$begA-1
+toCorr <- xIIdown[!posMatch[xIIdown]]
+length(toCorr)
+## [1] 69
+## hm450.manifest[toCorr]
+seqnames(hm450.manifest[toCorr]) <- factor(hm450.manifest$chrmA[toCorr], levels=seqlevels(hm450.manifest))
+ranges(hm450.manifest[toCorr]) <- IRanges(
+  start = hm450.manifest$begA[toCorr] - 1, 
+  end = hm450.manifest$begA[toCorr] + width(hm450.manifest[toCorr]) - 2)
+
+xIup <- which(hm450.manifest$designType=='I' & hm450.manifest$orientation=='up')
+posMatch[xIup] <- end(ranges(hm450.manifest[xIup]))==hm450.manifest[xIup]$begA+49
+toCorr <- xIup[!posMatch[xIup]]
+length(toCorr)
+## [1] 2
+## hm450.manifest[toCorr]
+seqnames(hm450.manifest[toCorr]) <- factor(hm450.manifest$chrmA[toCorr], levels=seqlevels(hm450.manifest))
+ranges(hm450.manifest[toCorr]) <- IRanges(
+  start = hm450.manifest$begA[toCorr] + 50 - width(hm450.manifest[toCorr]),
+  end = hm450.manifest$begA[toCorr] + 49)
+
+xIIup <- which(hm450.manifest$designType=='II' & hm450.manifest$orientation=='up')
+posMatch[xIIup] <- end(ranges(hm450.manifest[xIIup]))==hm450.manifest[xIIup]$begA+50
+toCorr <- xIIup[!posMatch[xIIup]]
+length(toCorr)
+## [1] 36
+## hm450.manifest[toCorr]
+seqnames(hm450.manifest[toCorr]) <- factor(hm450.manifest$chrmA[toCorr], levels=seqlevels(hm450.manifest))
+ranges(hm450.manifest[toCorr]) <- IRanges(
+  start = hm450.manifest$begA[toCorr] + 51 - width(hm450.manifest[toCorr]),
+  end = hm450.manifest$begA[toCorr] + 50)
+
+hm450.manifest$posMatch <- posMatch
+sum(hm450.manifest$mapQ.A<10)
+## [1] 18447
+sum(!is.na(hm450.manifest$mapQ.B) & hm450.manifest$mapQ.B<10)
+## [1] 5667
+sum(!hm450.manifest$posMatch)
+## [1] 108
+
+hm450.manifest$MASK.mapping <- (
+  hm450.manifest$mapQ.A<40 | 
+    hm450.manifest$cigarA != '50M' |
+    !hm450.manifest$posMatch |
+    (!is.na(hm450.manifest$mapQ.B) & (
+      hm450.manifest$mapQ.B<40 |
+        hm450.manifest$cigarB != '50M' |
+        hm450.manifest$chrmA!=hm450.manifest$chrmB |
+          hm450.manifest$begA!=hm450.manifest$begB)))
+
+sum(hm450.manifest$MASK.mapping)
+## [1] 40517
+
+## set extension base
+## nextBase QC
+## ---------------------
+extension <- read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/map.hg19.extbase.bed', header=F, sep='\t', stringsAsFactors = F, col.names=c('chrm','beg','end','strand','probeID','extBase'), row.names = 'probeID')
+extension <- extension[names(hm450.manifest),]
+hm450.manifest$nextBaseRef <- chartr("ACGT","TGCA", extension$extBase)
+table(hm450.manifest$nextBaseRef)
+#      A      C      G      T 
+#  20021 401792  46338  17426 
+extension$extBase[extension$extBase=='G'] <- 'A'
+
+## type I
+##-----------
+typeI <- hm450.manifest$designType=='I'
+## there is 1 type I mismatch: cg04983289
+sum(extension[typeI,]$extBase!=hm450.manifest[typeI]$nextBase)
+## [1] 1
+extensionI <- extension[typeI,]
+manifestI <- hm450.manifest[typeI]
+typeIunmatched <- extensionI[extensionI$extBase!=manifestI$nextBase,]
+nrow(typeIunmatched)
+## [1] 1
+## mapQ is 0, so the probe will be mapping-masked
+hm450.manifest[rownames(typeIunmatched)]$mapQ.A
+hm450.manifest[rownames(typeIunmatched)]$nextBase <- typeIunmatched$extBase
+## we correct color channel in hg38 manifest using the HG38 extension base
+assignColorChannel <- function(x) {if (x=='A' || x=='T') 'Red' else 'Grn'}
+newchannel <- sapply(hm450.manifest[rownames(typeIunmatched)]$nextBase, assignColorChannel)
+## 1 have switched color channel
+sum(newchannel != hm450.manifest[rownames(typeIunmatched)]$channel)
+## [1] 1
+rownames(typeIunmatched)[newchannel != hm450.manifest[rownames(typeIunmatched)]$channel]
+## [1] "cg04983289"
+hm450.manifest[rownames(typeIunmatched)]$channel <- newchannel
+
+## type II
+##-----------
+typeII <- hm450.manifest$designType=='II'
+rsProbe <- grepl('rs', names(hm450.manifest))
+typeIInonrs <- extension[typeII & !rsProbe,]
+hg19wrongtypeIIext <- typeIInonrs[typeIInonrs$extBase!='A',]
+## number of type II extension error: 54
+nrow(hg19wrongtypeIIext)
+## [1] 54
+## all of the non-'A' are mapping error, should return TRUE
+all(hm450.manifest[rownames(hg19wrongtypeIIext)]$MASK.mapping)
+## [1] TRUE
+typeIInonrsCorr <- typeIInonrs[typeIInonrs$extBase=='A',]
+hm450.manifest[rownames(typeIInonrsCorr)]$nextBase <- 'G/A'
+## make consistent extension base
+hm450.manifest[rownames(hg19wrongtypeIIext)]$nextBase <- hg19wrongtypeIIext$extBase
+typeIIrs <- extension[typeII & rsProbe,]
+hm450.manifest[rownames(typeIIrs)]$nextBase <- typeIIrs$extBase
+
+hm450.manifest$MASK.extBase <- names(hm450.manifest) %in% rownames(hg19wrongtypeIIext)
+sum(hm450.manifest$MASK.extBase)
+## [1] 54
+
+save(hm450.manifest, file='/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hm450.manifest.mapping.hg19.rda')
+#+END_SRC
+
+*** hg38
+
+#+BEGIN_SRC R
+
+## read tables
+#################
+## sourceseq is consistent with the probe sequence in term of direction.
+hg38Map <- read.table("/secondary/projects/laird/projects/2016_05_13_hm450_annotation/map.hg38.tsv", col.names=c('probeID','chrmA','begA','flag.A','mapQ.A','cigarA','chrmB','begB','flag.B','mapQ.B','cigarB'), stringsAsFactors=FALSE, sep='\t', row.names = 'probeID')
+dim(hg38Map)
+# [1] 485577     10
+
+hg38Seq <- read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38.probeSeq.tsv', col.names=c('chrm','beg','end','probeID','seq'), stringsAsFactors=FALSE, sep='\t', row.names='probeID')
+dim(hg38Seq)
+# [1] 485547     4
+
+gr.cpg <- make.gr(manifest.ordering.cg, 1, 'cg')
+## now unmapped probes has chr * and beg 0, coordinates still uncorrected
+gr.cpg.hg38 <- gr2seqs(gr.cpg, faf, hg38Map, hg38Seq)
+
+## CpH probes
+##################
+gr.ch <- make.gr(manifest.ordering.ch, 0, 'ch')
+gr.ch.hg38 <- gr2seqs(gr.ch, faf, hg38Map, hg38Seq)
+
+## SNPs
+##########
+## library(SNPlocs.Hsapiens.dbSNP.20120608)
+## snps <- SNPlocs.Hsapiens.dbSNP.20120608
+## library(SNPlocs.Hsapiens.dbSNP.20110815)
+suppressPackageStartupMessages(library(SNPlocs.Hsapiens.dbSNP144.GRCh37))
+snps <- SNPlocs.Hsapiens.dbSNP144.GRCh37
+rsnames <- rownames(manifest.ordering.rs)
+names(rsnames) <- rsnames
+## replace rs13369115 by rs10155413
+rsnames[rsnames == 'rs13369115'] <- 'rs10155413'
+snplocs <- snpsById(snps, rsnames, ifnotfound='warning')
+
+## Create GRanges for SNPs and fix probe locations.
+gr.snp <- make.gr(
+  manifest.ordering.rs, 0, 'rs', 
+  .seqnames=paste0('chr', as.character(seqnames(snplocs))),
+  .iranges=ranges(snplocs))
+names(gr.snp) <- names(rsnames)
+gr.snp.hg38 <- gr2seqs(gr.snp, faf, hg38Map, hg38Seq)
+
+## Merge data
+################
+hm450.manifest.hg38 <- c(gr.cpg.hg38,gr.ch.hg38,gr.snp.hg38)
+hm450.manifest.hg38 <- sortSeqlevels(hm450.manifest.hg38)
+hm450.manifest.hg38$designType <- as.factor(hm450.manifest.hg38$designType)
+hm450.manifest.hg38$orientation <- as.factor(hm450.manifest.hg38$orientation)
+hm450.manifest.hg38 <- sort(hm450.manifest.hg38)
+
+length(hm450.manifest.hg38)
+# 485577
+
+## Reset coordinate of GR using mapped coordinates
+##--------------------------------------------------
+mcols(hm450.manifest.hg38) <- cbind(mcols(hm450.manifest.hg38), hg38Map[names(hm450.manifest.hg38),])
+seqlevels(hm450.manifest.hg38) <- c(seqlevels(hm450.manifest.hg38),'chrM','*')
+hm450.manifest.hg38$posMatch <- rep(NA, length(hm450.manifest.hg38))
+
+xIdown <- which(hm450.manifest.hg38$designType=='I' & hm450.manifest.hg38$orientation=='down')
+toCorr <- xIdown
+seqnames(hm450.manifest.hg38[toCorr]) <- factor(hm450.manifest.hg38$chrmA[toCorr], levels=seqlevels(hm450.manifest.hg38))
+length(toCorr)
+## [1] 67422
+ranges(hm450.manifest.hg38[toCorr]) <- IRanges(
+  start = hm450.manifest.hg38$begA[toCorr], 
+  end = hm450.manifest.hg38$begA[toCorr] + width(hm450.manifest.hg38[toCorr]) - 1)
+
+xIIdown <- which(hm450.manifest.hg38$designType=='II' & hm450.manifest.hg38$orientation=='down')
+toCorr <- xIIdown
+seqnames(hm450.manifest.hg38[toCorr]) <- factor(hm450.manifest.hg38$chrmA[toCorr], levels=seqlevels(hm450.manifest.hg38))
+length(toCorr)
+## [1] 174974
+ranges(hm450.manifest.hg38[toCorr]) <- IRanges(
+  start = hm450.manifest.hg38$begA[toCorr] - 1, 
+  end = hm450.manifest.hg38$begA[toCorr] + width(hm450.manifest.hg38[toCorr]) - 2)
+
+xIup <- which(hm450.manifest.hg38$designType=='I' & hm450.manifest.hg38$orientation=='up')
+toCorr <- xIup
+seqnames(hm450.manifest.hg38[toCorr]) <- factor(hm450.manifest.hg38$chrmA[toCorr], levels=seqlevels(hm450.manifest.hg38))
+length(toCorr)
+## [1] 68079
+ranges(hm450.manifest.hg38[toCorr]) <- IRanges(
+  start = hm450.manifest.hg38$begA[toCorr] + 50 - width(hm450.manifest.hg38[toCorr]),
+  end = hm450.manifest.hg38$begA[toCorr] + 49)
+
+xIIup <- which(hm450.manifest.hg38$designType=='II' & hm450.manifest.hg38$orientation=='up')
+toCorr <- xIIup
+seqnames(hm450.manifest.hg38[toCorr]) <- factor(hm450.manifest.hg38$chrmA[toCorr], levels=seqlevels(hm450.manifest.hg38))
+length(toCorr)
+## [1] 175102
+ranges(hm450.manifest.hg38[toCorr]) <- IRanges(
+  start = hm450.manifest.hg38$begA[toCorr] + 51 - width(hm450.manifest.hg38[toCorr]),
+  end = hm450.manifest.hg38$begA[toCorr] + 50)
+
+## low mapping quality, or unmatched position or incomplete cigar
+hm450.manifest.hg38$MASK.mapping <- (
+  hm450.manifest.hg38$mapQ.A<40 | 
+    hm450.manifest.hg38$cigarA != '50M' |
+    (!is.na(hm450.manifest.hg38$mapQ.B) & (
+      hm450.manifest.hg38$mapQ.B<40 |
+        hm450.manifest.hg38$cigarB != '50M' |
+        hm450.manifest.hg38$chrmA!=hm450.manifest.hg38$chrmB |
+          hm450.manifest.hg38$begA!=hm450.manifest.hg38$begB)))
+
+sum(hm450.manifest.hg38$MASK.mapping)
+## [1] 41446
+
+## set extension base
+## nextBase QC
+## ---------------------
+extension <- read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/map.hg38.extbase.bed', header=F, sep='\t', stringsAsFactors = F, col.names=c('chrm','beg','end','strand','probeID','extBase'), row.names = 'probeID')
+extension <- extension[names(hm450.manifest.hg38),]
+hm450.manifest.hg38$nextBaseRef <- chartr("ACGT","TGCA", extension$extBase)
+table(hm450.manifest.hg38$nextBaseRef)
+##      A      C      G      T 
+##  20031 401712  46352  17452 
+## rownames(extension) <- names(hm450.manifest.hg38)
+extension$extBase[extension$extBase=='G'] <- 'A'
+unmappable <- is.na(extension$extBase)
+
+## type I
+##-----------
+typeI <- hm450.manifest.hg38$designType=='I' & !unmappable
+## there are 13 type I mismatches
+sum(extension[typeI,]$extBase!=hm450.manifest.hg38[typeI]$nextBase)
+## [1] 13
+extensionI <- extension[typeI,]
+manifestI <- hm450.manifest.hg38[typeI]
+typeIunmatched <- extensionI[extensionI$extBase!=manifestI$nextBase,]
+## 13 are unmatched
+nrow(typeIunmatched)
+## [1] 13
+## they are not always of low mapping quality, but some are, others are reference difference
+hm450.manifest.hg38[rownames(typeIunmatched)]$mapQ.A
+##  [1]  0  0  0  5  0 24  0 60  0  3  0 37 45
+hm450.manifest.hg38[rownames(typeIunmatched)]$nextBase <- typeIunmatched$extBase
+## we correct color channel in hg38 manifest using the HG38 extension base
+assignColorChannel <- function(x) { if (x=='A' || x=='T') 'Red' else 'Grn' }
+newchannel <- sapply(hm450.manifest.hg38[rownames(typeIunmatched)]$nextBase, assignColorChannel)
+## 10 have switched color channel
+sum(newchannel != hm450.manifest.hg38[rownames(typeIunmatched)]$channel)
+## [1] 10
+rownames(typeIunmatched)[newchannel != hm450.manifest.hg38[rownames(typeIunmatched)]$channel]
+## [1] "cg03933321" "cg06335633" "cg07529750" "cg19163074" "cg07751270"
+## [6] "cg02472801" "cg03492874" "cg04983289" "cg07434271" "cg11900657"
+hm450.manifest.hg38[rownames(typeIunmatched)]$channel <- newchannel
+
+## type II
+##-----------
+typeII <- hm450.manifest.hg38$designType=='II'
+rsProbe <- grepl('rs', names(hm450.manifest.hg38))
+typeIInonrs <- extension[typeII & !rsProbe & !unmappable,]
+## not all of the non-'A' are mapping error, should return TRUE, one case (cg25873532) is when the competing (intended) loci is no longer present in hg38
+## 85 cases of type II no longer have extension base A
+typeIInonrsWrong <- typeIInonrs[typeIInonrs$extBase!='A',]
+nrow(typeIInonrsWrong)
+## [1] 85
+## they are not always of low mapping quality, but some are, others are reference difference
+## should return FALSE
+all(hm450.manifest.hg38[rownames(typeIInonrsWrong)]$MASK.mapping)
+## [1] FALSE
+hm450.manifest.hg38[rownames(typeIInonrsWrong)]$nextBase <- typeIInonrsWrong$extBase
+typeIInonrsCorr <- typeIInonrs[typeIInonrs$extBase=='A',]
+hm450.manifest.hg38[rownames(typeIInonrsCorr)]$nextBase <- 'G/A'
+typeIIrs <- extension[typeII & rsProbe & !unmappable,]
+hm450.manifest.hg38[rownames(typeIIrs)]$nextBase <- typeIIrs$extBase
+
+### we flag all 105 (used to be 92) the type II wrong extension base either in hg19 or hg38
+hm450.manifest.hg38$MASK.extBase <- names(hm450.manifest.hg38) %in% c(rownames(typeIInonrsWrong), rownames(typeIunmatched))
+sum(hm450.manifest.hg38$MASK.extBase)
+## 98
+
+save(hm450.manifest.hg38, file='/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hm450.manifest.mapping.hg38.rda')
+#+END_SRC
+
+*** output hg19 Probe End sequence
+
+#+BEGIN_SRC R
+
+load('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hm450.manifest.mapping.hg19.rda')
+hm450 <- split(hm450.manifest, list(hm450.manifest$designType, hm450.manifest$orientation))
+names(hm450) <- sapply(hm450, function(x) paste0(as.character(x$designType[1]), '.', as.character(x$orientation[1])))
+
+length(hm450$I.down)
+## [1] 67428
+length(hm450$I.up)
+## [1] 68073
+length(hm450$II.down)
+## [1] 174949
+length(hm450$II.up)
+## [1] 175127
+
+probeEnd10 <- c(
+  resize(hm450$II.down, 10),
+  resize(hm450$II.up, 10, fix='end'),
+  resize(hm450$I.down, 10),
+  resize(hm450$I.up, 10, fix='end'))
+probeEnd10 <- sort(probeEnd10)
+mcols(probeEnd10) <- mcols(probeEnd10)[c('channel','orientation')]
+GR2bed(probeEnd10,'/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_probeEnd10.bed')
+
+probeEnd15 <- c(
+  resize(hm450$II.down, 15),
+  resize(hm450$II.up, 15, fix='end'),
+  resize(hm450$I.down, 15),
+  resize(hm450$I.up, 15, fix='end'))
+probeEnd15 <- sort(probeEnd15)
+mcols(probeEnd15) <- mcols(probeEnd15)[c('channel','orientation')]
+GR2bed(probeEnd15,'/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_probeEnd15.bed')
+
+probeEnd40 <- c(
+  resize(hm450$II.down, 40),
+  resize(hm450$II.up, 40, fix='end'),
+  resize(hm450$I.down, 40),
+  resize(hm450$I.up, 40, fix='end'))
+probeEnd40 <- sort(probeEnd40)
+mcols(probeEnd40) <- mcols(probeEnd40)[c('channel','orientation')]
+GR2bed(probeEnd40,'/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_probeEnd40.bed')
+
+typeI.nextbase <- c(
+  shift(resize(hm450$I.down, 1), -1),
+  shift(resize(hm450$I.up, 1, fix='end'),1))
+typeI.nextbase <- sort(typeI.nextbase)
+mcols(typeI.nextbase) <- mcols(typeI.nextbase)[c('channel','orientation')]
+GR2bed(typeI.nextbase,'/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_typeI.nextbase.bed')
+
+typeII.nextbase <- c(
+  resize(hm450$II.down, 1),
+  resize(hm450$II.up, 1, fix='end'))
+typeII.nextbase <- sort(typeII.nextbase)
+mcols(typeII.nextbase) <- mcols(typeII.nextbase)[c('channel','orientation')]
+GR2bed(typeII.nextbase, '/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_typeII.nextbase.bed')
+#+END_SRC
+
+*** output hg38 Probe End sequence
+
+#+BEGIN_SRC R
+
+load('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hm450.manifest.mapping.hg38.rda')
+hm450 <- split(hm450.manifest.hg38, list(hm450.manifest.hg38$designType, hm450.manifest.hg38$orientation))
+names(hm450) <- sapply(hm450, function(x) paste0(as.character(x$designType[1]), '.', as.character(x$orientation[1])))
+
+length(hm450$I.down)
+## [1] 67422
+length(hm450$I.up)
+## [1] 68079
+length(hm450$II.down)
+## [1] 174974
+length(hm450$II.up)
+## [1] 175102
+
+probeEnd10 <- c(
+  resize(hm450$II.down, 10),
+  resize(hm450$II.up, 10, fix='end'),
+  resize(hm450$I.down, 10),
+  resize(hm450$I.up, 10, fix='end'))
+probeEnd10 <- sort(probeEnd10)
+mcols(probeEnd10) <- mcols(probeEnd10)[c('channel','orientation')]
+GR2bed(probeEnd10,'/secondary/projects/laird/projects/2016_05_13_hm450_annotation//probeEnd10.bed')
+
+probeEnd15 <- c(
+  resize(hm450$II.down, 15),
+  resize(hm450$II.up, 15, fix='end'),
+  resize(hm450$I.down, 15),
+  resize(hm450$I.up, 15, fix='end'))
+probeEnd15 <- sort(probeEnd15)
+mcols(probeEnd15) <- mcols(probeEnd15)[c('channel','orientation')]
+GR2bed(probeEnd15,'/secondary/projects/laird/projects/2016_05_13_hm450_annotation/probeEnd15.bed')
+
+probeEnd40 <- c(
+  resize(hm450$II.down, 40),
+  resize(hm450$II.up, 40, fix='end'),
+  resize(hm450$I.down, 40),
+  resize(hm450$I.up, 40, fix='end'))
+probeEnd40 <- sort(probeEnd40)
+mcols(probeEnd40) <- mcols(probeEnd40)[c('channel','orientation')]
+GR2bed(probeEnd40,'/secondary/projects/laird/projects/2016_05_13_hm450_annotation/probeEnd40.bed')
+
+typeI.nextbase <- c(
+  shift(resize(hm450$I.down, 1), -1),
+  shift(resize(hm450$I.up, 1, fix='end'),1))
+typeI.nextbase <- sort(typeI.nextbase)
+mcols(typeI.nextbase) <- mcols(typeI.nextbase)[c('channel','orientation')]
+GR2bed(typeI.nextbase,'/secondary/projects/laird/projects/2016_05_13_hm450_annotation/typeI.nextbase.bed')
+
+typeII.nextbase <- c(
+  resize(hm450$II.down, 1),
+  resize(hm450$II.up, 1, fix='end'))
+typeII.nextbase <- sort(typeII.nextbase)
+mcols(typeII.nextbase) <- mcols(typeII.nextbase)[c('channel','orientation')]
+GR2bed(typeII.nextbase, '/secondary/projects/laird/projects/2016_05_13_hm450_annotation/typeII.nextbase.bed')
+#+END_SRC
+
+*** compare hg38 and hg19
+**** mapping
+#+BEGIN_SRC R
+
+#+END_SRC
+hg38Map <- hg38Map[rownames(hg19Map),]
+
+## type II after converting G to A
+crosscomp <- table(hg19Map[is.na(hg19Map$flag.B),]$flag.A, hg38Map[is.na(hg19Map$flag.B),]$flag.A)
+crosscomp <- crosscomp[,c(1,3,2)]
+rownames(crosscomp) <- c('Watson GRCh37','Crick GRCh37')
+colnames(crosscomp) <- c('Watson GRCh38','Crick GRCh38','unmapped GRCh38')
+crosscomp
+##               Watson GRCh38 Crick GRCh38 unmapped GRCh38
+## Watson GRCh37        174575          544               8
+## Crick GRCh37            527       174413               9
+
+## probe unmeth/A of type I
+crosscomp <- table(hg19Map[!is.na(hg19Map$flag.B),]$flag.A, hg38Map[!is.na(hg19Map$flag.B),]$flag.A)
+crosscomp <- crosscomp[,c(1,3,2)]
+rownames(crosscomp) <- c('Watson GRCh37','Crick GRCh37')
+colnames(crosscomp) <- c('Watson GRCh38','Crick GRCh38','unmapped GRCh38')
+crosscomp
+##               Watson GRCh38 Crick GRCh38 unmapped GRCh38
+## Watson GRCh37         67850          215               8
+## Crick GRCh37            229        67194               5
+
+## probe meth/B of type I
+crosscomp <- table(hg19Map$flag.B, hg38Map$flag.B)
+crosscomp <- crosscomp[,c(1,3,2)]
+rownames(crosscomp) <- c('Watson GRCh37','Crick GRCh37')
+colnames(crosscomp) <- c('Watson GRCh38','Crick GRCh38','unmapped GRCh38')
+crosscomp
+##               Watson GRCh38 Crick GRCh38 unmapped GRCh38
+## Watson GRCh37         67850          213               8
+## Crick GRCh37            226        67199               5
+
+seqlevels(hm450.manifest)
+table(hm450.manifest$designType, hm450.manifest.hg38$designType)
+##         I     II
+## I  135501      0
+## II      0 350076
+table(hm450.manifest$probeType, hm450.manifest.hg38$probeType)
+##        cg     ch     rs
+## cg 482421      0      0
+## ch      0   3091      0
+## rs      0      0     65
+table(hm450.manifest$orientation, hm450.manifest.hg38$orientation)
+##        down     up
+## down 241621    756
+## up      775 242425
+table(hm450.manifest$probeType, hm450.manifest$designType)
+##         I     II
+## cg 135476 346945
+## ch      0   3091
+## rs     25     40
+table(hm450.manifest.hg38$probeType, hm450.manifest.hg38$designType)
+##         I     II
+## cg 135476 346945
+## ch      0   3091
+## rs     25     40
+
+
+table(hm450.manifest[nextbase.commonsnpI$probeID]$nextBase, nextbase.commonsnpI$extAlt)
+##     A   C   T Unknown
+## A 389 165 121       6
+## C 228   0 507       5
+## T  81 130   0       2
+
+#+END_SRC
+
+wzmanip compare -t1 /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_typeI.channelswitching.probes.txt -c1 1 -t2 /secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_typeI.channelswitching.probes.txt -c2 1
+# 12: 288
+# 1not2: 17
+# 2not1: 742
+
+wzmanip compare -t1 hg19_typeII.nextbase_masked.probes.txt -c1 1 -t2 hg38_typeII.nextbase_masked.probes.txt -c2 1
+12: 6059
+1not2: 427
+2not1: 1142
+
+sum(hm450.manifest.hg38$MASK.extBase | hm450.manifest$MASK.extBase)
+## 105
+
+hm450.manifest <- readRDS('/secondary/projects/laird/projects/2016_05_13_InfiniumAnnotation/20180104/hm450/hm450.hg19.manifest.rds')
+a <- a[names(hm450.manifest)]
+summarizeMASKs2(hm450.manifest)
+summarizeMASKs(a)
+
+*** gather maskings
+**** hg38
+
+#+BEGIN_SRC R
+setMASK <- function(.ma) {
+  .ma$MASK.sub25.copy <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy25_mask_probes.txt')$V1
+  .ma$MASK.sub30.copy <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy30_mask_probes.txt')$V1
+  .ma$MASK.sub35.copy <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy35_mask_probes.txt')$V1
+  .ma$MASK.sub40.copy <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_copy40_mask_probes.txt')$V1
+  .ma$MASK.typeINextBaseSwitch <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_typeI.channelswitching.probes.txt')$V1
+  .ma$MASK.snp5.GMAF1p <- (names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_snp_mask_probes.txt')$V1 | names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg38_typeII.nextbase_masked.probes.txt')$V1)
+  .ma$MASK.general <- (.ma$MASK.typeINextBaseSwitch | .ma$MASK.sub30.copy | .ma$MASK.extBase | .ma$MASK.snp5.GMAF1p | .ma$MASK.mapping)
+  .ma
+}
+
+load('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hm450.manifest.mapping.hg38.rda')
+hm450.manifest.hg38 <- setMASK(hm450.manifest.hg38)
+summarizeMASKs(hm450.manifest.hg38)
+# MASK.sub25.copy: 60654 
+# MASK.sub30.copy: 17568 
+# MASK.sub35.copy: 10545 
+# MASK.sub40.copy: 6419 
+# MASK.typeINextBaseSwitch: 1030 
+# MASK.snp5.GMAF1p: 24008 
+# MASK.extBase: 98
+# MASK.mapping: 41446
+# MASK.general: 65808 
+saveRDS(hm450.manifest.hg38, file='/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hm450.manifest.hg38.rds')
+
+#+END_SRC
+
+**** hg19
+
+#+BEGIN_SRC R
+setMASK <- function(.ma) {
+  .ma$MASK.sub25.copy <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy25_mask_probes.txt')$V1
+  .ma$MASK.sub30.copy <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy30_mask_probes.txt')$V1
+  .ma$MASK.sub35.copy <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy35_mask_probes.txt')$V1
+  .ma$MASK.sub40.copy <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_copy40_mask_probes.txt')$V1
+  .ma$MASK.typeINextBaseSwitch <- names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_typeI.channelswitching.probes.txt')$V1
+  .ma$MASK.snp5.GMAF1p <- (names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_snp_mask_probes.txt')$V1 | names(.ma) %in% read.table('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hg19_typeII.nextbase_masked.probes.txt')$V1)
+  .ma$MASK.general <- (.ma$MASK.typeINextBaseSwitch | .ma$MASK.sub30.copy | .ma$MASK.extBase | .ma$MASK.snp5.GMAF1p | .ma$MASK.mapping)
+  .ma
+}
+
+load('/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hm450.manifest.mapping.hg19.rda')
+hm450.manifest <- setMASK(hm450.manifest)
+summarizeMASKs(hm450.manifest)
+# MASK.sub25.copy: 59706 
+# MASK.sub30.copy: 16546 
+# MASK.sub35.copy: 9498 
+# MASK.sub40.copy: 5343 
+# MASK.typeINextBaseSwitch: 305 
+# MASK.snp5.GMAF1p: 20510 
+# MASK.extBase: 54
+# MASK.mapping: 40517
+# MASK.general: 61482
+saveRDS(hm450.manifest, file='/secondary/projects/laird/projects/2016_05_13_hm450_annotation/hm450.manifest.hg19.rds')
+
+#+END_SRC
+
+* EPIC
