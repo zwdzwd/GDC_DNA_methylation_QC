@@ -1,0 +1,48 @@
+barcode	tumor/normal	cancer	TCGAproject	caseID	fileName	fileSize
+TCGA_BLCA_A2LA	tumor	BLCA	TCGA-BLCA	797a71ee-372d-41e5-aeee-5ab3c4661110	ResultCount_MERGING_1_NIC1254A93.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1067949885
+TCGA_BLCA_A13J	tumor	BLCA	TCGA-BLCA	556fcbc8-172a-4af1-8822-ae036e8d68e8	ResultCount_MERGING_1_NIC1254A89.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1088295177
+TCGA_BLCA_A1AG	tumor	BLCA	TCGA-BLCA	f8c0a69c-df53-4a0a-a30e-4424c0ce3dd5	ResultCount_MERGING_1_NIC1254A94.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1082922293
+TCGA_BLCA_A2HQ	tumor	BLCA	TCGA-BLCA	cede5274-279d-4021-8aca-5ecc4bf94d66	ResultCount_MERGING_1_NIC1254A92.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1068738038
+TCGA_BLCA_A1AA	tumor	BLCA	TCGA-BLCA	56d8a1b8-1268-4362-a7f1-77b76fbf1b59	ResultCount_MERGING_1_NIC1254A96.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1078524678
+TCGA_BLCA_A20V	tumor	BLCA	TCGA-BLCA	24f21425-b001-4986-aedf-5b4dd851c6ad	ResultCount_MERGING_1_NIC1254A91.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1078709948
+TCGA_BLCA_NA20V	adjacent normal	BLCA	TCGA-BLCA	24f21425-b001-4986-aedf-5b4dd851c6ad	ResultCount_MERGING_1_NIC1254A95.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1087525397
+TCGA_BRCA_A0YG	tumor	BRCA	TCGA-BRCA	c0892598-1f7b-4f23-9cd8-731f797753d5	ResultCount_MERGING_1_NIC1254A17.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1102452353
+TCGA_BRCA_A07I	tumor	BRCA	TCGA-BRCA	566792ae-f853-4a47-856d-f02cdcfcb18a	ResultCount_MERGING_1_NIC1254A16.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1101483418
+TCGA_BRCA_A15H	tumor	BRCA	TCGA-BRCA	5580b21a-2cdb-4777-ad79-6e06654144f5	ResultCount_MERGING_1_NIC1254A18.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1102645432
+TCGA_BRCA_A04X	tumor	BRCA	TCGA-BRCA	733a2a0f-b37a-4b81-b49e-3c0f30d1eb37	ResultCount_MERGING_1_NIC1254A15.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1101731847
+TCGA_BRCA_A0CE	tumor	BRCA	TCGA-BRCA	9d95a65b-e41d-4f93-92d4-99dce29ff40d	TCGA-A7-A0CE-01A-11D-A148-05_4ff7626b-4c2f-40fd-9df1-10c1a488402a_Breast_tumor.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1101837251
+TCGA_BRCA_NA0CE	adjacent normal	BRCA	TCGA-BRCA	9d95a65b-e41d-4f93-92d4-99dce29ff40d	TCGA-A7-A0CE-11A-21D-A148-05_805f2c82-49d5-4994-a2a5-98dd1b832f0b_Breast_normal.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1097698651
+TCGA_COAD_A00R	tumor	COAD	TCGA-COAD	ca22edd4-eb7c-4677-84aa-6f0354459a19	ResultCount_MERGING_1_NIC1254A45.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1094169137
+TCGA_COAD_3518	tumor	COAD	TCGA-COAD	c5c4a0a5-900d-483d-9282-475654d63265	TCGA-AA-3518-01A-02D-1518-05_b9591620-97e7-4355-b18c-36fa74851106_Colon_tumor.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1103022353
+TCGA_COAD_N3518	adjacent normal	COAD	TCGA-COAD	c5c4a0a5-900d-483d-9282-475654d63265	TCGA-AA-3518-11A-01D-1518-05_d85e9d86-091c-4629-876e-d1eba7b78e83_Colon_normal.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1104714274
+TCGA_GBM_1788	tumor	GBM	TCGA-GBM	9a41f05b-19b1-4269-9997-4b59e378280c	ResultCount_MERGING_1_NIC1254A54.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1098574775
+TCGA_GBM_1460	tumor	GBM	TCGA-GBM	827453a9-7388-4336-9ac5-4defcb904607	ResultCount_MERGING_1_NIC1254A53.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1091445356
+TCGA_GBM_0128	tumor	GBM	TCGA-GBM	31e6e6c8-9197-4927-bfe4-8f6836f963da	ResultCount_MERGING_1_NIC1254A46.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1087688405
+TCGA_GBM_3477	tumor	GBM	TCGA-GBM	60e47b7d-c664-46c0-ac13-db688d4b8a58	ResultCount_MERGING_1_NIC1254A48.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1058449959
+TCGA_GBM_1401	tumor	GBM	TCGA-GBM	6176621d-8534-4fba-a0e7-74a5a78245a9	ResultCount_MERGING_1_NIC1254A52.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1086340251
+TCGA_GBM_1454	tumor	GBM	TCGA-GBM	c2399f5d-dc29-42e9-81f1-1d164d4cc55d	ResultCount_MERGING_1_NIC1254A47.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1073103089
+TCGA_LUAD_6215	tumor	LUAD	TCGA-LUAD	dbd5b0de-94c9-45dd-afb3-6820a7ecaca2	ResultCount_MERGING_1_NIC1254A71.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1085966865
+TCGA_LUAD_7156	tumor	LUAD	TCGA-LUAD	7b0622ab-63ea-483f-ae40-d3ea587bdbba	ResultCount_MERGING_1_NIC1254A72.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1080825446
+TCGA_LUAD_4630	tumor	LUAD	TCGA-LUAD	f1985735-a188-4567-a88a-530f9b80291b	ResultCount_MERGING_1_NIC1254A68.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1076965250
+TCGA_LUAD_6840	tumor	LUAD	TCGA-LUAD	d5326429-9805-47f9-97b0-fbda658e3f01	ResultCount_MERGING_1_NIC1254A73.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1079228079
+TCGA_LUAD_6148	tumor	LUAD	TCGA-LUAD	8994c8c4-9ea0-46cb-b4a5-0055d7da5bfa	ResultCount_MERGING_1_NIC1254A69.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1092639863
+TCGA_LUAD_N6148	adjacent normal	LUAD	TCGA-LUAD	8994c8c4-9ea0-46cb-b4a5-0055d7da5bfa	ResultCount_MERGING_1_NIC1254A70.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1093365800
+TCGA_LUSC_2695	tumor	LUSC	TCGA-LUSC	acae4e48-57de-40c5-9ae5-4386144ebaea	ResultCount_MERGING_1_NIC1254A14.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1087921437
+TCGA_LUSC_1078	tumor	LUSC	TCGA-LUSC	0ab8d063-62b4-4d47-82aa-e3351a60029d	ResultCount_MERGING_1_NIC1254A67.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1082747995
+TCGA_LUSC_2600	tumor	LUSC	TCGA-LUSC	da61857a-b00e-4a19-ab02-8fbb2ee56bea	ResultCount_MERGING_1_NIC1254A13.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1080029136
+TCGA_LUSC_2722	tumor	LUSC	TCGA-LUSC	6fd72426-f6c8-47ca-a500-d5d3600b9b15	TCGA-60-2722-01A-01D-1871-05_720f6804-059c-4516-a77d-74e8a01c739b_Lung_tumor.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1096943614
+TCGA_LUSC_N2722	adjacent normal	LUSC	TCGA-LUSC	6fd72426-f6c8-47ca-a500-d5d3600b9b15	ResultCount_MERGING_1_NIC1254A12.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1108434855
+TCGA_READ_3593	tumor	READ	TCGA-READ	10290e91-9784-4f94-8daa-b5d9a8b0efb9	ResultCount_MERGING_1_NIC1254A51.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1092351519
+TCGA_READ_2689	tumor	READ	TCGA-READ	335d0351-3740-4847-9ff4-be2f078c70f7	ResultCount_MERGING_1_NIC1254A49.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1082417966
+TCGA_READ_N2689	adjacent normal	READ	TCGA-READ	335d0351-3740-4847-9ff4-be2f078c70f7	ResultCount_MERGING_1_NIC1254A50.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1093246511
+TCGA_STAD_6519	tumor	STAD	TCGA-STAD	e37cae9e-0656-4b89-b326-739a5cc859e0	ResultCount_MERGING_1_NIC1254A77.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1086929532
+TCGA_STAD_6177	tumor	STAD	TCGA-STAD	c3cba26e-38c2-4569-afd6-6b045e604808	ResultCount_MERGING_1_NIC1254A78.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1081478287
+TCGA_STAD_5730	tumor	STAD	TCGA-STAD	09587f1c-5c99-4102-bc49-84d50fa8d0ce	ResultCount_MERGING_1_NIC1254A76.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1084411628
+TCGA_STAD_6452	tumor	STAD	TCGA-STAD	27988b3e-cde1-4f4b-82a1-6d8ad08db8e9	ResultCount_MERGING_1_NIC1254A110.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1086147866
+TCGA_STAD_N6452	adjacent normal	STAD	TCGA-STAD	27988b3e-cde1-4f4b-82a1-6d8ad08db8e9	ResultCount_MERGING_1_NIC1254A75.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1087119113
+TCGA_UCEC_A0G2	tumor	UCEC	TCGA-UCEC	4abbd258-0f0c-4428-901d-625d47ad363a	ResultCount_MERGING_1_NIC1254A113.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1078714414
+TCGA_UCEC_A0K6	tumor	UCEC	TCGA-UCEC	5cba9441-6812-49c0-a0f6-7928ed4e5b81	ResultCount_MERGING_1_NIC1254A109.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1090278311
+TCGA_UCEC_A05J	tumor	UCEC	TCGA-UCEC	38f9fe64-de79-498c-b3ca-1c83af0ed72a	ResultCount_MERGING_1_NIC1254A112.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1075123065
+TCGA_UCEC_A1CK	tumor	UCEC	TCGA-UCEC	45effb44-0b5f-4081-a202-d85969c72f2b	ResultCount_MERGING_1_NIC1254A111.hg19_rCRSchrm.fa.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1084809907
+TCGA_UCEC_A1CI	tumor	UCEC	TCGA-UCEC	fba80122-d8b2-4d8d-a032-9767e8160f9f	TCGA-AX-A1CI-01A-11D-A17H-05_e31eb5a4-d191-4bc2-bb4d-cbd3f23bc7db_Endo_tumor.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1100968638
+TCGA_UCEC_NA1CI	adjacent normal	UCEC	TCGA-UCEC	fba80122-d8b2-4d8d-a032-9767e8160f9f	TCGA-AX-A1CI-11A-11D-A17H-05_ac5058ed-1d03-4555-8f5b-a1a88eae9cc4_Endo_normal.realign.mdups.recal.cpg.filtered.sort.CG.6plus2.fixed.bed	1105324253
