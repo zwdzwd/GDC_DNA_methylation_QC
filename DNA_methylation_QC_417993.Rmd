@@ -1,0 +1,348 @@
+---
+title: "GDC QC DNA Methylation"
+output:
+    html_document:
+        toc: true
+        toc_float: true
+---
+
+```{r setup, include=FALSE}
+## default options
+## this is "GDC QC DNA Methylation" report
+## on http://rpubs.com/zhouwanding/417993
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(cache = TRUE)
+library(tidyverse)
+library(GenomicRanges)
+library(knitr)
+library(treemap)
+library(scales)
+outputdir <- '/secondary/projects/laird/projects/2018_05_02_Wanding_tools/GDC_DNA_methylation_QC/output/'
+```
+
+# hg19 Legacy (GDC r1.0-3.0)
+
+## File Counts
+```{r message=FALSE}
+df_legacy <- list(
+    hm27=read_tsv(url('https://raw.githubusercontent.com/zwdzwd/GDC_DNA_methylation_QC/master/file_lists/20180410_GDC_manifest_legacy.tsv_HM27_lvl3.tsv')),
+    hm450=read_tsv(url('https://raw.githubusercontent.com/zwdzwd/GDC_DNA_methylation_QC/master/file_lists/20180410_GDC_manifest_legacy.tsv_HM450_lvl3.tsv'))
+)
+sapply(df_legacy, nrow)
+```
+
+Cases/patients (first 12 letters of TCGA barcode)
+```{r}
+sapply(df_legacy, function(x) length(unique(substr(x$TCGA_barcode,1,12))))
+```
+
+## Data
+```{r message=FALSE}
+dfdata_legacy <- list(
+    hm27=read_tsv(url('https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/sample_data/release1-3_legacy/07e1bc0f-b2d9-41cb-bf4d-1a9ac769654a/jhu-usc.edu_COAD.HumanMethylation27.4.lvl-3.TCGA-AA-A004-01A-01D-A00B-05.txt'),skip=1),
+    hm450=read_tsv(url('https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/sample_data/release1-3_legacy/3d4a102e-4a4c-48c3-ad51-8cc9f9b879e7/jhu-usc.edu_KIRC.HumanMethylation450.7.lvl-3.TCGA-DV-A4W0-05A-11D-A264-05.txt'),skip=1))
+
+dfdata_legacy$hm27 %>% head
+dfdata_legacy$hm450 %>% head
+```
+
+# hg38 LiftOver (GDC r4.0-12.0)
+
+## File Counts
+```{r message=FALSE}
+df_R4 <- list(
+    hm27=read_tsv(url('https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/file_lists/20180410_GDC_manifest_liftOver_workflow.tsv_HM27_lvl3.tsv')),
+    hm450=read_tsv(url('https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/file_lists/20180410_GDC_manifest_liftOver_workflow.tsv_HM450_lvl3.tsv'))
+)
+sapply(df_R4, nrow)
+```
+
+Cases/patients (first 12 letters of TCGA barcode)
+```{r}
+sapply(df_R4, function(x) length(unique(substr(x$TCGA_barcode,1,12))))
+```
+
+## Data
+```{r message=FALSE}
+dfdata_R4 <- list(
+    hm27=read_tsv(url('https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/sample_data/release4_plus_hg38/df4a53cd-6d07-41be-a7b7-c381a658e7ae/jhu-usc.edu_COAD.HumanMethylation27.4.lvl-3.TCGA-AA-A004-01A-01D-A00B-05.gdc_hg38.txt')),
+    hm450=read_tsv(gzcon(url('https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/sample_data/release4_plus_hg38/ef164350-d911-4a3d-a53a-b2efed5e682c/jhu-usc.edu_KIRC.HumanMethylation450.7.lvl-3.TCGA-DV-A4W0-05A-11D-A264-05.gdc_hg38.txt.gz'))))
+
+dfdata_R4$hm27 %>% head
+dfdata_R4$hm450 %>% head
+```
+
+# Compare hg19 and hg38
+
+## Measurements
+
+Measurements are the same, only the coordinates and gene annotation have changed.
+```{r}
+sapply(dfdata_R4, nrow)
+sapply(dfdata_legacy, nrow)
+```
+
+```{r}
+all(dfdata_legacy$hm450$Beta_value == dfdata_R4$hm450$Beta_value, na.rm = TRUE)
+```
+
+## Coordinates
+
+Unmapped probes on hg38 are annotated with "*".
+
+## Fraction of probes unmapped in hg38
+
+#### HM27
+```{r}
+tb <- table(dfdata_R4$hm27$Chromosome)
+kable(tb)
+(1-unname(tb['*'])/sum(tb)) * 100 # percentage of mapped probes
+```
+
+#### HM450
+```{r}
+tb <- table(dfdata_R4$hm450$Chromosome)
+kable(tb)
+(1-unname(tb['*'])/sum(tb)) * 100 # percentage of mapped probes
+```
+
+## Fraction of unmapped
+```{r}
+kable(sapply(dfdata_R4, function(x) table(x$Chromosome=='*')))
+# legacy doesn't have any unmapped probes
+sapply(dfdata_legacy, function(x) table(x$Chromosome=='*'))
+```
+
+
+## Probe Mapping by Chromosome
+
+Most probes are mapped to the same chromosome.
+```{r}
+kable(table(dfdata_legacy$hm450$Chromosome, dfdata_R4$hm450$Chromosome))
+kable(table(dfdata_legacy$hm27$Chromosome, dfdata_R4$hm27$Chromosome))
+```
+
+## CpGs Targeted by Multiple Probes
+### HM450
+```{r}
+dfdata_R4$hm450 %>% filter(Chromosome!='*') %>% arrange(Chromosome, Start) -> dfdata_R4_bycoord
+dup_index <- which(dfdata_R4_bycoord$Start[-1] == dfdata_R4_bycoord$Start[-nrow(dfdata_R4_bycoord)])
+dup_probe_index <- sort(unique(c(dup_index, dup_index+1)))
+dfdata_R4_bycoord[dup_probe_index,] %>% dplyr::select(Chromosome, Start, End, 'Composite Element REF')
+```
+```{r eval=FALSE, include=FALSE}
+dfdata_R4_bycoord[dup_probe_index,] %>% write_tsv(file.path(outputdir, 'HM450_hg38_multiprobe_cpgs.tsv'))
+```
+Under GRCh38, `r nrow(unique(dfdata_R4_bycoord[dup_probe_index,'Start']))` CpGs become interrogated with multiple probes (`r length(dup_probe_index)` probes). Note this is after excluding MASK_mapping. The full list is available at [here](https://github.com/zwdzwd/GDC_DNA_methylation_QC/blob/master/output/HM450_hg38_multiprobe_cpgs.tsv).
+
+### HM27
+No such CpGs exist for HM27
+```{r}
+dfdata_R4$hm27 %>% filter(Chromosome!='*') %>% arrange(Chromosome, Start) -> dfdata_R4_bycoord
+which(dfdata_R4_bycoord$Start[-1] == dfdata_R4_bycoord$Start[-nrow(dfdata_R4_bycoord)])
+```
+
+## Probe Mapping by Quality
+```{r eval=FALSE, include=FALSE}
+dir.create('~/Downloads/tmp/20180808/', showWarnings = FALSE)
+download.file('http://zwdzwd.io/InfiniumAnnotation/20180808/hm450/hm450.hg38.manifest.rds', '~/Downloads/tmp/20180808/hm450.hg38.manifest.rds')
+download.file('http://zwdzwd.io/InfiniumAnnotation/20180808/hm450/hm450.hg19.manifest.rds', '~/Downloads/tmp/20180808/hm450.hg19.manifest.rds')
+```
+
+```{r}
+HM450.hg38.manifest <- readRDS('~/Downloads/tmp/20180808/hm450.hg38.manifest.rds')
+HM450.hg19.manifest <- readRDS('~/Downloads/tmp/20180808/hm450.hg19.manifest.rds')
+```
+
+
+#### All probes
+```{r}
+da <- HM450.hg19.manifest
+db <- HM450.hg38.manifest[names(da)]
+a <- cut(da[da$designType=='I']$mapQ_A, c(0,10,40,59,60), include.lowest = T)
+b <- cut(db[da$designType=='I']$mapQ_A, c(0,10,40,59,60), include.lowest = T)
+tble <- table(a, b)
+tble['(59,60]','(59,60]'] / sum(tble) # Fraction of unique mapping
+```
+
+#### Type-I
+```{r}
+a <- cut(da[da$designType=='I']$mapQ_A, c(0,10,40,59,60), include.lowest = T)
+b <- cut(db[da$designType=='I']$mapQ_A, c(0,10,40,59,60), include.lowest = T)
+tble <- table(a, b)
+kable(tble, caption='Mapping quality cross comparison type cg Type-I A')
+a <- cut(da[da$designType=='I']$mapQ_B, c(0,10,40,59,60), include.lowest = T)
+b <- cut(db[da$designType=='I']$mapQ_B, c(0,10,40,59,60), include.lowest = T)
+tble <- table(a, b)
+kable(tble, caption='Mapping quality cross comparison type cg Type-I B')
+```
+
+#### Type-II
+```{r}
+a <- cut(da[da$designType=='II']$mapQ_A, c(0,10,40,59,60), include.lowest = T)
+b <- cut(db[da$designType=='II']$mapQ_A, c(0,10,40,59,60), include.lowest = T)
+tble <- table(a, b)
+kable(tble, caption='Mapping quality cross comparison type cg type II')
+```
+
+## Probe Mapping by Mismatch
+#### A-allele
+```{r}
+tble <- table(da[da$probeType!='rs']$NM_A, db[db$probeType!='rs']$NM_A)
+kable(tble)
+tble['0','0'] / sum(tble) # Fraction of perfect mapping
+tble_decoy <- table(da[da$probeType!='rs']$wDecoy_NM_A, db[db$probeType!='rs']$wDecoy_NM_A)
+kable(tble_decoy)
+tble_decoy['0','0'] / sum(tble_decoy) # Fraction of perfect mapping with decoy
+tble_decoy['0','0'] - tble['0','0'] # Number of probes moved to decoy
+```
+
+#### B-allele
+```{r}
+tble <- table(da[da$probeType!='rs']$NM_B, db[db$probeType!='rs']$NM_B)
+kable(tble)
+tble['0','0'] / sum(tble) # Fraction of perfect mapping
+tble_decoy <- table(da[da$probeType!='rs']$wDecoy_NM_B, db[db$probeType!='rs']$wDecoy_NM_B)
+kable(tble_decoy)
+tble_decoy['0','0'] / sum(tble_decoy) # Fraction of perfect mapping with decoy
+tble_decoy['0','0'] - tble['0','0'] # Number of probes moved to decoy
+```
+
+#### SNP probes
+One probe switched the REF and ALT.
+```{r}
+kable(table(da[da$designType=='I' & da$probeType=='rs']$NM_A, db[db$designType=='I' & db$probeType=='rs']$NM_A))
+kable(table(da[da$designType=='I' & da$probeType=='rs']$NM_B, db[db$designType=='I' & db$probeType=='rs']$NM_B))
+kable(table(da[da$designType=='II' & da$probeType=='rs']$NM_A, db[db$designType=='II' & db$probeType=='rs']$NM_A))
+```
+
+## Gene Association
+
+#### HM450
+```{r}
+all(dfdata_R4$hm450$`Composite Element REF` == dfdata_legacy$hm450$`Composite Element REF`)
+dfdata_R4$hm450$geneUniq <- sapply(strsplit(dfdata_R4$hm450$Gene_Symbol, ';'), function(x) paste0(sort(unique(x)), collapse = ';'))
+dfdata_R4$hm450$geneType <- sapply(strsplit(dfdata_R4$hm450$Gene_Type, ';'), function(x) paste0(unique(x), collapse = ';'))
+df <- dfdata_R4$hm450 %>% 
+    dplyr::rename(probe='Composite Element REF') %>% 
+    dplyr::select(probe, geneUniq, geneType) %>% 
+    cbind(dfdata_legacy$hm450) %>% 
+    mutate(geneUniq=replace(geneUniq, geneUniq=='.',NA)) %>% 
+    dplyr::rename(gene_hg38=geneUniq) %>% 
+    mutate(gene_hg19 = sapply(strsplit(Gene_Symbol, ';'), function(x) paste0(sort(unique(x)), collapse = ';'))) %>% 
+    mutate(gene_hg19 = replace(gene_hg19, gene_hg19=='',NA))
+```
+
+More probes are associated with gene in GRCh38.
+```{r}
+tb <- table(!is.na(df$gene_hg38), !is.na(df$gene_hg19))
+rownames(tb) <- c('Not Annotated in hg38','Annotated in hg38')
+colnames(tb) <- c('Not Annotated in hg19','Annotated in hg19')
+kable(tb)
+kable(tb/sum(tb))
+```
+
+`r sum(!is.na(df$gene_hg19))` in `r nrow(df)` probes are associated with gene in hg19. `r sum(!is.na(df$gene_hg38))` in `r nrow(df)` probes are associated with gene in hg38. `r df %>% filter(!is.na(gene_hg38), !is.na(gene_hg19)) %>% summarise(sum(gene_hg38==gene_hg19))` probes are annotated with exactly the same genes.
+
+```{r}
+df$hg19_in_hg38 <- apply(df, 1, function(x) all(sapply(strsplit(x['gene_hg19'],';')[[1]], function(xx) grepl(xx,x['gene_hg38']))))
+df$hg19_in_hg38 <- ifelse(is.na(df$gene_hg19), TRUE, df$hg19_in_hg38)
+df$hg38_in_hg19 <- apply(df, 1, function(x) all(sapply(strsplit(x['gene_hg38'],';')[[1]], function(xx) grepl(xx,x['gene_hg19']))))
+df$hg38_in_hg19 <- ifelse(is.na(df$gene_hg38), TRUE, df$hg38_in_hg19)
+```
+
+```{r}
+df_identical <- (df %>% filter((is.na(gene_hg19) & is.na(gene_hg38)) | (hg19_in_hg38 & hg38_in_hg19)))
+df_different <- (df %>% filter(!((is.na(gene_hg19) & is.na(gene_hg38)) | (hg19_in_hg38 & hg38_in_hg19))))
+```
+
+
+`r nrow(df_identical)` (`r nrow(df_identical)/nrow(df)*100`%) probes probes have identical gene annotations. `r df_different %>% filter(hg19_in_hg38) %>% nrow` (`r (df_different %>% filter(hg19_in_hg38) %>% nrow)/nrow(df)*100`%) probes annotated in hg19 is not included in genes annotated hg38. Only `r df_different %>% filter(!hg19_in_hg38) %>% nrow` (`r (df_different %>% filter(!hg19_in_hg38) %>% nrow)/nrow(df)*100`%) probes lost gene annotation from hg19 in hg38. `r df_different %>% filter(!hg19_in_hg38) %>% filter(grepl('LOC', gene_hg19) | grepl('orf', gene_hg19)) %>% nrow` probes are either with 'orf' or 'LOC' names, indicating an update of gene annotation from resolving these identifiers. `r df_different %>% filter(!hg38_in_hg19) %>% nrow` (`r (df_different %>% filter(!hg38_in_hg19) %>% nrow)/nrow(df)*100`%) probes gain new annotation in hg38 compared to hg19. A substantial parts are due to the addition of non-coding genes.
+
+```{r}
+df_different %>% filter(!hg38_in_hg19) %>% summarise(
+    antisense=sum(grepl('antisense', geneType))/n()*100,
+    lincRNA=sum(grepl('lincRNA', geneType))/n()*100,
+    miRNA=sum(grepl('miRNA', geneType))/n()*100,
+    processed_transcript=sum(grepl('processed_transcript', geneType))/n()*100,
+    pseudogene=sum(grepl('pseudogene', geneType))/n()*100)
+df_different %>% head
+```
+```{r eval=FALSE, include=FALSE}
+df %>% mutate(different_gene_annotation=!((is.na(gene_hg19) & is.na(gene_hg38)) | (hg19_in_hg38 & hg38_in_hg19))) %>% write_tsv(file.path(outputdir,'HM450_probes_with_different_gene_annotation_column.tsv'))
+```
+The complete gene discordance table can be downloaded at [https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/output/HM450_probes_with_different_gene_annotation_column.tsv](https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/output/HM450_probes_with_different_gene_annotation_column.tsv)
+
+```{r}
+df %>% mutate(same=ifelse(hg19_in_hg38&hg38_in_hg19, 'CONCORDANT', ifelse(hg19_in_hg38, 'AUGMENTED', 'DISCORDANT')), geneType=sapply(strsplit(geneType,';'), function(x) paste0(sort(x), collapse=';'))) %>% mutate(geneType=replace(geneType, geneType=='.', 'NA')) -> df1
+df1 %>% count(same) %>% mutate(prop=prop.table(n))
+df1 %>% group_by(same, geneType) %>% summarise(freq=n()) %>% ungroup() %>% mutate(geneType = sprintf('%s (%1.2f%%)', sub(';',' ',geneType), freq/sum(freq)*100)) -> df2
+
+# vocabulary_hg19 <- do.call(c,strsplit(df$gene_hg19,';'))
+# pdf('~/gallery/20180819_gdc_qc_treemap_hm450.pdf')
+treemap(df2, index=c('same','geneType'),vSize='freq',palette='Blues')
+```
+
+#### HM27
+```{r}
+all(dfdata_R4$hm27$`Composite Element REF` == dfdata_legacy$hm27$`Composite Element REF`)
+dfdata_R4$hm27$geneUniq <- sapply(strsplit(dfdata_R4$hm27$Gene_Symbol, ';'), function(x) paste0(sort(unique(x)), collapse = ';'))
+dfdata_R4$hm27$geneType <- sapply(strsplit(dfdata_R4$hm27$Gene_Type, ';'), function(x) paste0(unique(x), collapse = ';'))
+df <- dfdata_R4$hm27 %>% 
+    dplyr::rename(probe='Composite Element REF') %>% 
+    dplyr::select(probe, geneUniq, geneType) %>% 
+    cbind(dfdata_legacy$hm27) %>% 
+    mutate(geneUniq=replace(geneUniq, geneUniq=='.',NA)) %>% 
+    dplyr::rename(gene_hg38=geneUniq) %>% 
+    mutate(gene_hg19 = sapply(strsplit(Gene_Symbol, ';'), function(x) paste0(sort(unique(x)), collapse = ';'))) %>% 
+    mutate(gene_hg19 = replace(gene_hg19, gene_hg19=='',NA))
+```
+
+More probes are associated with gene in GRCh38.
+```{r}
+tb <- table(!is.na(df$gene_hg38), !is.na(df$gene_hg19))
+rownames(tb) <- c('Not Annotated in hg38','Annotated in hg38')
+colnames(tb) <- c('Not Annotated in hg19','Annotated in hg19')
+kable(tb)
+kable(tb/sum(tb))
+```
+
+`r sum(!is.na(df$gene_hg19))` in `r nrow(df)` probes are associated with gene in hg19. `r sum(!is.na(df$gene_hg38))` in `r nrow(df)` probes are associated with gene in hg38. `r df %>% filter(!is.na(gene_hg38), !is.na(gene_hg19)) %>% summarise(sum(gene_hg38==gene_hg19))` probes are annotated with exactly the same genes.
+
+```{r}
+df$hg19_in_hg38 <- apply(df, 1, function(x) all(sapply(strsplit(x['gene_hg19'],';')[[1]], function(xx) grepl(xx,x['gene_hg38']))))
+df$hg19_in_hg38 <- ifelse(is.na(df$gene_hg19), TRUE, df$hg19_in_hg38)
+df$hg38_in_hg19 <- apply(df, 1, function(x) all(sapply(strsplit(x['gene_hg38'],';')[[1]], function(xx) grepl(xx,x['gene_hg19']))))
+df$hg38_in_hg19 <- ifelse(is.na(df$gene_hg38), TRUE, df$hg38_in_hg19)
+```
+
+```{r}
+df_identical <- (df %>% filter((is.na(gene_hg19) & is.na(gene_hg38)) | (hg19_in_hg38 & hg38_in_hg19)))
+df_different <- (df %>% filter(!((is.na(gene_hg19) & is.na(gene_hg38)) | (hg19_in_hg38 & hg38_in_hg19))))
+```
+
+`r nrow(df_identical)` (`r nrow(df_identical)/nrow(df)*100`%) probes have identical gene annotations. `r df_different %>% filter(hg19_in_hg38) %>% nrow` (`r (df_different %>% filter(hg19_in_hg38) %>% nrow)/nrow(df)*100`%) probes annotated in hg19 is not included in genes annotated hg38. Only `r df_different %>% filter(!hg19_in_hg38) %>% nrow` (`r (df_different %>% filter(!hg19_in_hg38) %>% nrow)/nrow(df)*100`%) probes lost gene annotation from hg19 in hg38. `r df_different %>% filter(!hg19_in_hg38) %>% filter(grepl('LOC', gene_hg19) | grepl('orf', gene_hg19)) %>% nrow` probes are either with 'orf' or 'LOC' names, indicating an update of gene annotation from resolving these identifiers. `r df_different %>% filter(!hg38_in_hg19) %>% nrow` (`r (df_different %>% filter(!hg38_in_hg19) %>% nrow)/nrow(df)*100`%) probes gain new annotation in hg38 compared to hg19. A substantial parts are due to the addition of non-coding genes.
+
+```{r}
+df_different %>% filter(!hg38_in_hg19) %>% summarise(
+    antisense=sum(grepl('antisense', geneType))/n()*100,
+    lincRNA=sum(grepl('lincRNA', geneType))/n()*100,
+    miRNA=sum(grepl('miRNA', geneType))/n()*100,
+    processed_transcript=sum(grepl('processed_transcript', geneType))/n()*100,
+    pseudogene=sum(grepl('pseudogene', geneType))/n()*100)
+df_different %>% head
+```
+```{r eval=FALSE, include=FALSE}
+df %>% mutate(different_gene_annotation=!((is.na(gene_hg19) & is.na(gene_hg38)) | (hg19_in_hg38 & hg38_in_hg19))) %>% write_tsv(file.path(outputdir,'HM27_probes_with_different_gene_annotation_column.tsv'))
+```
+The complete gene discordance table can be downloaded at [https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/output/HM27_probes_with_different_gene_annotation_column.tsv](https://github.com/zwdzwd/GDC_DNA_methylation_QC/raw/master/output/HM27_probes_with_different_gene_annotation_column.tsv)
+
+```{r}
+df %>% mutate(same=ifelse(hg19_in_hg38&hg38_in_hg19, 'CONCORDANT', ifelse(hg19_in_hg38, 'AUGMENTED', 'DISCORDANT')), geneType=sapply(strsplit(geneType,';'), function(x) paste0(sort(x), collapse=';'))) %>% mutate(geneType=replace(geneType, geneType=='.', 'NA')) -> df1
+df1 %>% count(same) %>% mutate(prop=prop.table(n))
+df1 %>% group_by(same, geneType) %>% summarise(freq=n()) %>% ungroup() %>% mutate(geneType = sprintf('%s (%1.2f%%)', sub(';',' ',geneType), freq/sum(freq)*100)) -> df2
+
+# vocabulary_hg19 <- do.call(c,strsplit(df$gene_hg19,';'))
+# pdf('~/gallery/20180819_gdc_qc_treemap_hm450.pdf')
+treemap(df2, index=c('same','geneType'),vSize='freq',palette='Blues')
+```
