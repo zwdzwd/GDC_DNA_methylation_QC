@@ -20,6 +20,9 @@ library(scales)
 outputdir <- '/secondary/projects/laird/projects/2018_05_02_Wanding_tools/GDC_DNA_methylation_QC/output/'
 ```
 
+The output can be found here:
+https://rpubs.com/zhouwanding/417993
+
 # hg19 Legacy (GDC r1.0-3.0)
 
 ## File Counts
